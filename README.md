@@ -9,3 +9,12 @@ Este repositorio es para realizar el problema del viajante tanto de forma secuen
  - Digraph alojado en memoria y rellenado
  - Creados tour y besttour
 
+### Versión 0.9
+ - Plantilla del programa completo pasada a código
+ - No funcional
+
+### Versión 1.1
+ - Cambios en el código.
+ - Arregladas las violaciones de segmento.
+ - No funcionan los métodos del stack.
+ - Bucle infinito entre las primeras rutas.
