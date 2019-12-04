@@ -24,24 +24,34 @@ typedef stack_struct *mystack;
 tour_t besttour;
 mystack stack;
 int **digraph;
+int n;
 
 //Métodos
-void push(tour_t tour){
+void push(tour_t tour){ 
     stack->list[stack->list_sz] = tour;
     stack->list_sz = stack->list_sz + 1;
 }
 
-void pop(tour_t tour){
+tour_t pop(){
+    tour_t tour;
+    tour = (tour_t) malloc(sizeof(tour_struct));
+    tour->pobl = (int *) malloc(n*sizeof(int));
+
     stack->list_sz = stack->list_sz - 1;
     tour = stack->list[stack->list_sz];
+    return tour;
 }
 
 int factible(tour_t tour, int poblacion){
+    //printf("Población %d\n", poblacion);
     if((tour->coste + digraph[tour->pobl[tour->cont-1]][poblacion]) >= besttour->coste){
         return 0;
     }
+    //printf("LLega %d\n", tour->cont);
     for(int i = 0; i< tour->cont;i++){
+        printf("tour %d pobl %d cont %d\n", tour->pobl[i], poblacion, tour->cont);
         if(tour->pobl[i] == poblacion){
+            //printf("Nodo %d\n", poblacion);
             return 0;
         }
     }
@@ -50,7 +60,7 @@ int factible(tour_t tour, int poblacion){
 
 void printTour(tour_t tour){
     for(int i = 0; i< tour->cont; i++){
-        printf("Población: %d ", tour->pobl[i]);
+        printf("Población: %d", tour->pobl[i]);
     }
     printf("\nCoste: %d\n", tour->coste);
 }
@@ -60,40 +70,58 @@ void printStack(){
         for(int j = 0; j< stack->list[i]->cont; j++){
             printf("Población: %d ", stack->list[i]->pobl[j]);
         }
+        printf("\nSize: %d", stack->list_sz);
         printf("\nCoste: %d\n", stack->list[i]->coste);
     }
 }
 
+void printPoblaciones(int poblaciones[n]){
+    printf("\nArray poblaciones\n");
+    for(int i=0;i<n;i++){
+        printf("%d\n",poblaciones[i]);
+    }
+}
 
-void Rec_en_profund(tour_t tour, int n){
+void Rec_en_profund(tour_t tour){
+    tour->pobl = (int *) malloc(n*sizeof(int));
+    stack->list = malloc(INT_MAX);
+    
     int poblaciones[n];
+
     for(int i = 0; i< n ; i++){
         poblaciones[i] = -1;
     }
+
     poblaciones[0] = 0;
-    tour->pobl = poblaciones;
+    tour->pobl = &poblaciones[0];
     tour->cont = 1;
     tour->coste = 0;
     push(tour);
     while(stack->list_sz != 0){
-        pop(tour);
+        printStack(0);
+        tour = pop();
+        printPoblaciones(poblaciones);
+        //printStack(0);
         if(tour->cont == n){
             if(tour->coste < besttour->coste){
                 besttour = tour;
             }
         }else{ 
             for(int i = n-1; i!=0 ; i--){
+                //printf("\n%d ", i);
                 if(factible(tour,i) == 1){
+                    //printf("\n %d %d", contador, tour->cont);
                     poblaciones[tour->cont] = i;
-                    tour->pobl = poblaciones;
+                    tour->pobl = &poblaciones[0];
                     tour->cont = tour->cont + 1;
                     tour->coste = tour->coste + digraph[tour->pobl[tour->cont-2]][tour->pobl[tour->cont-1]];
+                    printPoblaciones(poblaciones);
                     push(tour);
                     tour->coste = tour->coste - digraph[tour->pobl[tour->cont-2]][tour->pobl[tour->cont-1]];
                     tour->cont = tour->cont - 1;
                     poblaciones[tour->cont] = -1;  
-                    tour->pobl = poblaciones;
-                }              
+                    tour->pobl = &poblaciones[0];
+                }
             }
         }
     }
@@ -101,7 +129,7 @@ void Rec_en_profund(tour_t tour, int n){
 
 int main(int argc, char *argv[]){
     double inicio, fin;
-    int i, j, n;
+    int i, j;
     FILE *digraph_file;
     tour_t tour;
 
@@ -121,23 +149,26 @@ int main(int argc, char *argv[]){
         }
     }
     //Reservamos espacio para tour y besttour
-    tour = malloc((n+1)*sizeof(tour_t));
-    besttour = malloc((n+1)*sizeof(tour_t));
-    stack = malloc(INT_MAX);
-    stack->list = malloc(INT_MAX);
-    tour->pobl = malloc((n+1)*sizeof(int));
-    besttour->pobl = malloc((n+1)*sizeof(int));
+    //tour = malloc((n+1)*sizeof(tour));
+    tour = (tour_t) malloc(sizeof(tour_struct));
+    besttour = (tour_t) malloc(sizeof(tour_struct));
+    stack =  (mystack) malloc(sizeof(stack_struct));
+
+    //stack->list = (tour_t*) malloc((2+n*(n-3)/2)*sizeof(tour_t));
+    besttour->pobl = (int *) malloc(n*sizeof(int));
+    //besttour->pobl = malloc((n+1)*sizeof(int));
     
-    tour->pobl = 0;
-    tour->cont = 1;
-    tour->coste = 0;
+    /*tour->pobl = 0;
+    tour->cont = 0;
+    tour->coste = 0;*/
+
     besttour->pobl = 0;
     besttour->cont = 0;
     besttour->coste = INT_MAX;
     stack->list_sz = 0;
     
     GET_TIME(inicio);
-    Rec_en_profund(tour,n);
+    Rec_en_profund(tour);
     GET_TIME(fin);
     
     /*

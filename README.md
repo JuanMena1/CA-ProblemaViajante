@@ -18,3 +18,7 @@ Este repositorio es para realizar el problema del viajante tanto de forma secuen
  - Arregladas las violaciones de segmento.
  - No funcionan los métodos del stack.
  - Bucle infinito entre las primeras rutas.
+
+### Versión 1.2
+ - Arreglados métodos del stack.
+ - Bucles infinitos por tours con 0s.
