@@ -25,104 +25,93 @@ tour_t besttour;
 mystack stack;
 int **digraph;
 int n;
+int contador = 0;
 
 //Métodos
-void push(tour_t tour){ 
-    stack->list[stack->list_sz] = tour;
+void printTour(tour_t tour, int id){
+    printf("~~~~~~Tour:%d~~~~~~\nNº poblaciones: %d\nPoblaciones: ", id, tour->cont);
+    for(int i = 0; i< tour->cont; i++){
+        printf("%d, ", tour->pobl[i]);
+    }
+    printf("\nCoste: %d\n~~~~~~~~~~~~~~~~~~\n", tour->coste);
+}
+
+void printStack(){
+    printf("-----------STACK------------\n");
+    printf(" - Tamaño: %d\n", stack->list_sz);
+    for(int i = 0; i< stack->list_sz;i++){
+        printTour(stack->list[i],i);
+    }
+    printf("----------------------------\n\n");
+}
+
+void push(tour_t tour){
+    tour_t tour2;
+    tour2 = (tour_t) malloc(sizeof(tour_struct));
+
+    *tour2 = *tour;
+
+    stack->list[stack->list_sz] = tour2;
     stack->list_sz = stack->list_sz + 1;
 }
 
 tour_t pop(){
     tour_t tour;
     tour = (tour_t) malloc(sizeof(tour_struct));
-    tour->pobl = (int *) malloc(n*sizeof(int));
 
     stack->list_sz = stack->list_sz - 1;
-    tour = stack->list[stack->list_sz];
+    *tour = *stack->list[stack->list_sz];
     return tour;
 }
 
 int factible(tour_t tour, int poblacion){
-    //printf("Población %d\n", poblacion);
     if((tour->coste + digraph[tour->pobl[tour->cont-1]][poblacion]) >= besttour->coste){
         return 0;
     }
-    //printf("LLega %d\n", tour->cont);
+
     for(int i = 0; i< tour->cont;i++){
-        printf("tour %d pobl %d cont %d\n", tour->pobl[i], poblacion, tour->cont);
         if(tour->pobl[i] == poblacion){
-            //printf("Nodo %d\n", poblacion);
             return 0;
         }
+        for(int j = 0; j< tour->cont;j++){
+            if(tour->pobl[i] == tour->pobl[j] && i!=j){
+                return 0;
+            }
+        }
     }
+
     return 1;
 }
 
-void printTour(tour_t tour){
-    for(int i = 0; i< tour->cont; i++){
-        printf("Población: %d", tour->pobl[i]);
-    }
-    printf("\nCoste: %d\n", tour->coste);
-}
-
-void printStack(){
-    for(int i = 0; i< stack->list_sz;i++){
-        for(int j = 0; j< stack->list[i]->cont; j++){
-            printf("Población: %d ", stack->list[i]->pobl[j]);
-        }
-        printf("\nSize: %d", stack->list_sz);
-        printf("\nCoste: %d\n", stack->list[i]->coste);
-    }
-}
-
-void printPoblaciones(int poblaciones[n]){
-    printf("\nArray poblaciones\n");
-    for(int i=0;i<n;i++){
-        printf("%d\n",poblaciones[i]);
-    }
-}
-
 void Rec_en_profund(tour_t tour){
-    tour->pobl = (int *) malloc(n*sizeof(int));
-    stack->list = malloc(INT_MAX);
-    
-    int poblaciones[n];
+    int* pobl = (int *) malloc(n*sizeof(int));
+    int pob = 0;
 
-    for(int i = 0; i< n ; i++){
-        poblaciones[i] = -1;
-    }
-
-    poblaciones[0] = 0;
-    tour->pobl = &poblaciones[0];
-    tour->cont = 1;
-    tour->coste = 0;
     push(tour);
     while(stack->list_sz != 0){
-        printStack(0);
-        tour = pop();
-        printPoblaciones(poblaciones);
-        //printStack(0);
+        printStack();
+        tour=pop();
         if(tour->cont == n){
             if(tour->coste < besttour->coste){
                 besttour = tour;
             }
         }else{ 
             for(int i = n-1; i!=0 ; i--){
-                //printf("\n%d ", i);
-                if(factible(tour,i) == 1){
-                    //printf("\n %d %d", contador, tour->cont);
-                    poblaciones[tour->cont] = i;
-                    tour->pobl = &poblaciones[0];
+                if(factible(tour,i) == 1){         
+                    pobl = tour->pobl;
+                    pob = tour->pobl[tour->cont];
+                    tour->pobl[tour->cont] = i;
                     tour->cont = tour->cont + 1;
                     tour->coste = tour->coste + digraph[tour->pobl[tour->cont-2]][tour->pobl[tour->cont-1]];
-                    printPoblaciones(poblaciones);
+                    //printf("Poblacion que entra %d, numero ciudades %d, coste %d \n",i, tour->cont, tour->coste);
                     push(tour);
                     tour->coste = tour->coste - digraph[tour->pobl[tour->cont-2]][tour->pobl[tour->cont-1]];
                     tour->cont = tour->cont - 1;
-                    poblaciones[tour->cont] = -1;  
-                    tour->pobl = &poblaciones[0];
+                    tour->pobl = (int *) malloc(n*sizeof(int));
+                    tour->pobl[tour->cont] = pob;
+                    tour->pobl = pobl;
                 }
-            }
+            }                   
         }
     }
 }
@@ -153,6 +142,8 @@ int main(int argc, char *argv[]){
     tour = (tour_t) malloc(sizeof(tour_struct));
     besttour = (tour_t) malloc(sizeof(tour_struct));
     stack =  (mystack) malloc(sizeof(stack_struct));
+     stack->list = malloc(INT_MAX);
+
 
     //stack->list = (tour_t*) malloc((2+n*(n-3)/2)*sizeof(tour_t));
     besttour->pobl = (int *) malloc(n*sizeof(int));
@@ -166,14 +157,15 @@ int main(int argc, char *argv[]){
     besttour->cont = 0;
     besttour->coste = INT_MAX;
     stack->list_sz = 0;
+
+    tour->pobl = (int *) malloc(n*sizeof(int));
+    tour->pobl[0] = 0;
+    tour->cont = 1;
+    tour->coste = 0;
     
     GET_TIME(inicio);
     Rec_en_profund(tour);
     GET_TIME(fin);
-    
-    /*
-    for(int k = 0; k< besttour->cont; k++){
-        printf("Población: %d", besttour->pobl[k]);
-    }
-    */
+
+   //printTour(besttour,0);
 }
