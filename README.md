@@ -22,3 +22,8 @@ Este repositorio es para realizar el problema del viajante tanto de forma secuen
 ### Versión 1.2
  - Arreglados métodos del stack.
  - Bucles infinitos por tours con 0s.
+
+### Versión 1.3
+ - Cambiados métodos de print.
+ - Cambios en el código.
+   - O añade 0 en los tour o se deja tour sin hacer.
