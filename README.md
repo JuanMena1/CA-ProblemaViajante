@@ -27,3 +27,7 @@ Este repositorio es para realizar el problema del viajante tanto de forma secuen
  - Cambiados métodos de print.
  - Cambios en el código.
    - O añade 0 en los tour o se deja tour sin hacer.
+
+### Versión 2.0
+ - Versión funcional.
+ - El error estaba en copiar tour->pobl completa y no solo la 1ª población (memcpy).
