@@ -99,6 +99,7 @@ int factible(tour_t tour, int poblacion)
 
 void Rec_en_profund(tour_t tour)
 {
+    int contador = 0;
     push(tour);
     while (stack->list_sz != 0)
     {
@@ -127,12 +128,20 @@ void Rec_en_profund(tour_t tour)
                     tour->coste = tour->coste + digraph[tour->pobl[tour->cont - 1]][i];
                     (tour->cont)++;
                     push(tour);
+                    contador++;
                     /*Deshacemos los cambios anteriores para explorar un nuevo tour*/
                     (tour->cont)--;
                     tour->coste = tour->coste - digraph[tour->pobl[tour->cont - 1]][i];
                 }
             }
         }
+    }
+    if(contador >= size){
+        /*Creo que aquí hay que llamar al Scatterv para que reparta los recorridos,
+        pero no se bien como calcular scount y displs porque esto solo lo tiene que hacer
+        el proceso 0 y algo viene en las diapos
+        Al Scatterv tienen que llamarlo todos*/
+        contador = 0;
     }
 }
 
@@ -165,15 +174,14 @@ int main(int argc, char *argv[])
 {
     double inicio, fin;
     tour_t tour;
-    MPI_Datatype type;
+    MPI_Datatype type_pobl;
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm comm;
 
-    MPI_Type_contiguous(n+2, MPI_INT, &type);
-    MPI_Type_commit(&type);
-    
+    MPI_Type_contiguous(n+2, MPI_INT, &type_pobl);
+    MPI_Type_commit(&type_pobl);
 
     if (rank == 0)
     {
@@ -195,9 +203,16 @@ int main(int argc, char *argv[])
         besttour->pobl = 0;
         besttour->cont = 1;
         besttour->coste = INT_MAX;
+
         stack->list_sz = 0;
 
+        for (int i=0; i<size; i++) {
+            scounts[i]=recorridos_proceso;
+            displs[i]+=displs[i-1]+scounts[i-1];
+        }
+
         //MPI_Scatterv(sbuf, scounts, displs, MPI_INT, rbuf, 100, MPI_INT, root, comm);
+        //MPI_Scatterv(&stack->list, scounts, displs, type_pobl, &rbuf, 100, type_pobl, 0, comm);
 
     /* Aquí es donde cierra el MPI como lo tenía Juan
     }
@@ -221,6 +236,9 @@ int main(int argc, char *argv[])
     free(stack->list);
     free(stack);
     free(digraph);
+
+    MPI_Finalize();
+    return 0;
     } //Para poner el if del rank 0 hasta el final para probar con 1 solo proceso MPI
 
     /* Yo creo que la mejor opción es hacer que cuando el stack tenga por ejemplo 5 caminos y tenemos 5 nodos
