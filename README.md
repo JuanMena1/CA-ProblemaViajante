@@ -38,3 +38,6 @@ Este repositorio es para realizar el problema del viajante tanto de forma secuen
 ### Versión 2.2
  - Versión secuencial final.
  - Versión MPI comenzada.
+
+### Versión 2.3
+ - Reparado problema del método leerMatriz.

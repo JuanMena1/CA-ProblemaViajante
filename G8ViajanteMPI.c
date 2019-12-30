@@ -102,6 +102,7 @@ void Rec_en_profund(tour_t tour)
     push(tour);
     while (stack->list_sz != 0)
     {
+        //printf("Tamaño pila: %d", stack->list_sz);
         tour = pop();
         if (tour->cont == n)
         { /*Comprobamos si ya hemos visitado todas las poblaciones*/
@@ -135,11 +136,12 @@ void Rec_en_profund(tour_t tour)
     }
 }
 
-void leerMatriz()
+void leerMatriz(char *nombre_archivo)
 {
     FILE *digraph_file;
+    int i, j;
     /*Leemos el fichero y lo pasamos a la variable digraph*/
-    digraph_file = fopen(argv[1], "r");
+    digraph_file = fopen(nombre_archivo, "r");
     fscanf(digraph_file, "%d,", &n);
 
     /*Reservamos memoria para el digraph*/
@@ -162,19 +164,20 @@ void leerMatriz()
 int main(int argc, char *argv[])
 {
     double inicio, fin;
-    int i, j;
     tour_t tour;
     MPI_Datatype type;
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm comm;
 
     MPI_Type_contiguous(n+2, MPI_INT, &type);
     MPI_Type_commit(&type);
+    
 
     if (rank == 0)
     {
-        leerMatriz();
+        leerMatriz(argv[1]);
         /*Reservamos espacio para tour, besttour y la pila*/
         tour = (tour_t)malloc(sizeof(tour_struct));
         besttour = (tour_t)malloc(sizeof(tour_struct));
@@ -194,11 +197,14 @@ int main(int argc, char *argv[])
         besttour->coste = INT_MAX;
         stack->list_sz = 0;
 
-        MPI_Scatterv(sbuf, scounts, displs, MPI_INT, rbuf, 100, MPI_INT, root, comm);
+        //MPI_Scatterv(sbuf, scounts, displs, MPI_INT, rbuf, 100, MPI_INT, root, comm);
+
+    /* Aquí es donde cierra el MPI como lo tenía Juan
     }
     else
-    {
+    {    
     }
+    */
 
     GET_TIME(inicio);
     Rec_en_profund(tour);
@@ -215,4 +221,29 @@ int main(int argc, char *argv[])
     free(stack->list);
     free(stack);
     free(digraph);
+    } //Para poner el if del rank 0 hasta el final para probar con 1 solo proceso MPI
+
+    /* Yo creo que la mejor opción es hacer que cuando el stack tenga por ejemplo 5 caminos y tenemos 5 nodos
+       creamos 5 stacks uno por nodo, cada uno que siga el programa como si fuera secuencial y al final
+       cada uno que saque su besttour. Al final los comparamos todos y nos quedamos con el mejor y andando.
+       No parece que sea muy dificil, si podemos hacerlo así bien y luego ya si nos sobra tiempo miramos lo
+       del scatterv.
+
+       Osea el nodo 0 empieza el programa y en cuanto haya nodos para los que quedan el se quita de hacer el programa
+       y se queda esperando los besttour de los otros, esos los mete en su pila de tours y vuelve a llamar al metodo
+       besttour con todos.
+
+       Por ejemplo si hay 5 nodos, el 0 hace hasta que haya 4 en el stack y despues un camino del stack para los rangos
+       del 1 al 4 y el rango 0 a esperar.
+
+       Así solo hay que hacer un MPI_Send por rango y 4 MPI_Receive en el rango 0.
+
+       La cosa es que como crear un stack por nodo y como meter en ese stack su primer camino que le toque para que
+       siga a partir de ese.
+
+       De todas formas el programa va rapido así que no se yo si vamos a mejorar el tiempo de ejecución pero bueno.
+
+        PD: mira lo que he encontrado https://cutt.ly/ertMbeW
+
+    */
 }
