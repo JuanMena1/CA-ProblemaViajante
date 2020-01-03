@@ -4,6 +4,7 @@
 #include "timer.h"
 #include <limits.h>
 #include "mpi.h"
+#include <math.h>
 
 /*Estructuras*/
 typedef struct
@@ -28,7 +29,7 @@ tour_t besttour;
 mystack stack;
 int **digraph; // Prof.: para matrices de enteros suele ser más recomendable usar int* que int**
 int n;
-int size, rank, sbuf, root, *displs, *scounts;
+int size, rank, sbuf, root;
 MPI_Status status;
 
 /*Métodos*/
@@ -42,7 +43,7 @@ void printTour(tour_t tour)
     printf("\nCoste: %d\n~~~~~~~~~~~~~~~~~~\n", tour->coste);
 }
 
-void printStack()
+void printStack(mystack stack)
 {
     printf("-----------STACK------------\n");
     printf(" - Tamaño: %d\n", stack->list_sz);
@@ -138,16 +139,13 @@ tour_t Rec_en_profund(tour_t lista_tours[], int tamano, mystack stack, tour_t be
     return besttour;
 }
 
-void repartirRecorridos(tour_t tour, mystack stack)
+void repartirRecorridos(tour_t tour, mystack stack, tour_t besttour)
 {
     push(tour, stack);
-    while (stack->list_sz != 0)
+    while (stack->list_sz < size)
     {
-        if (stack->list_sz >= size)
-        {
-            break;
-        }
         tour = pop(stack);
+        
         for (int i = n - 1; i > 0; i--)
         {
             if (factible(tour, i, besttour))
@@ -201,10 +199,14 @@ int main(int argc, char *argv[])
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm comm;
+    MPI_Request request;
+    int *scounts = malloc(sizeof(int)*size);
+    int *displs = malloc(sizeof(int)*size);
 
     MPI_Type_contiguous(n + 3, MPI_INT, &type_pobl);
     MPI_Type_commit(&type_pobl);
-    type_pobl rbuf[100];
+    int rbuf[100];
+    int num_recv[1];
 
     /*Reservamos espacio para tour, besttour y la pila*/
     tour = (tour_t)malloc(sizeof(tour_struct));
@@ -223,39 +225,105 @@ int main(int argc, char *argv[])
     besttour->pobl = 0;
     besttour->cont = 1;
     besttour->coste = INT_MAX;
-
     stack->list_sz = 0;
+    int lista_repartir[(n + 3) * stack->list_sz];
+    int num_enviar = 0;
+    int aux[n+3];
+    int contador = 0;
+    int receptor = 1;
 
     if (rank == 0)
     {
         leerMatriz(argv[1]);
-        repartirRecorridos(tour, stack);
-        for (int i = 0; i < size; i++)
-        {
-            scounts[i] = stack->list_sz / size;
+        repartirRecorridos(tour, stack, besttour);
+        printf("Hay %d procesos list_sz %d y a cada uno le tocan %d tours, al ultimo le toca %d \n", size, stack->list_sz, (int)ceil((float)stack->list_sz / (float)(size-1)), stack->list_sz - (size - 2) * (int)ceil((float)stack->list_sz / (float)(size-1)));
+        num_enviar = stack->list_sz - (size - 2) * (int)ceil((float)stack->list_sz / (float)(size-1));
+        MPI_Send(&num_enviar, 1, MPI_INT, size-1, 0, MPI_COMM_WORLD);
+
+        num_enviar = (int)ceil((float)stack->list_sz / (float)(size-1));
+        for(int i=1;i<size-1;i++){
+            MPI_Send(&num_enviar, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
         }
-        scounts[size - 1] = stack->list_sz / size + stack->list_sz % size;
+        int vueltas_for = stack->list_sz;
+        for(int i=0;i<vueltas_for;i++){
+            tour = pop(stack);
+            aux[i]=tour->coste;
+            aux[i+1]=tour->cont;
+            for (int j = 0; j < tour->cont; j++)
+            {
+                aux[i+2+j]=tour->pobl[j];
+                //printf("Pobl %d\n", tour->pobl[j]);
+            }
+            if(contador==num_enviar){
+                receptor++;
+                contador=0;
+            }
+            MPI_Isend(&aux, 1, type_pobl, receptor, 0, MPI_COMM_WORLD, &request);
+            //printf("pasa Isend\n");
+            contador++;
+        }
+    } else {
+        MPI_Recv(&num_recv, 1, MPI_INT, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        //printf("Llega %d\n", num_recv[0]);
+
+        printf("Soy el proceso %d y voy a recibir %d\n", rank, num_recv[0]);
+        for(int i=0;i<num_recv[0];i++){
+            MPI_Recv(&rbuf, 1, type_pobl, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            //printf("pasa 2 recv\n");
+
+            tour->coste=rbuf[0];
+            tour->cont=rbuf[1];
+            printf("cont %d\n", tour->cont);
+            for (int j = 0; j < tour->cont; j++)
+            {
+                tour->pobl[j]=rbuf[j+2];
+            }
+            
+            push(tour, stack);
+        }
+        //printStack(stack);
+    }
+        /*//Mierda del Scatterv
+        
+        for (int i = 0; i < size - 1; i++)
+        {
+            scounts[i] = (int)ceil((float)stack->list_sz / (float)size);
+        }
+        scounts[size - 1] = stack->list_sz - (size - 1) * (int)ceil((float)stack->list_sz / (float)size);
         displs[0] = 0;
         for (int i = 1; i < size; i++)
         {
             displs[i] = displs[i - 1] + scounts[i - 1];
         }
-        int lista_repartir[(n + 3) * stack->list_sz];
-        for (int i = 0; i < stack->list_sz*(n+3); i+=n+3)
-        {
-            lista_repartir[i] = stack->list[i]->coste;
-            lista_repartir[i + 1] = stack->list[i]->cont;
-            for (int j = 0; j < n; j++)
-            {
-                lista_repartir[i + 2 + j] = stack->list[i]->pobl[j];
-            }
-        }
-    }
-    
-    MPI_Scatterv(&lista_repartir, scounts, displs, type_pobl, &rbuf, scounts[rank], type_pobl, 0, comm);
+        int tamano_for = stack->list_sz;
+        int desplazamiento = 0;
+        
 
-    tour_t lista_tours[scounts[rank]];
-    for (int i = 0; i <scounts[rank]*(n+3); i+=n+3)
+        for (int i = 0; i < tamano_for; i++)
+        {   
+            tour = pop(stack);
+            lista_repartir[desplazamiento] = tour->coste;
+            lista_repartir[desplazamiento + 1] = tour->cont;
+            //printf("%d %d\n", lista_repartir[desplazamiento], lista_repartir[desplazamiento+1]);
+            //printStack(stack);
+            for (int j = 0; j < tour->cont; j++)
+            {
+                //printf("%d  %d\n", i, j);
+                //printTour(tour);
+                //printf("%d\n",tour->pobl[j]);
+                lista_repartir[desplazamiento + 2 + j] = tour->pobl[j];
+            }
+            desplazamiento+=n+3;
+        }*/
+        /*for(int i=0;i<tamano_for*(n+3);i++){
+            printf("%d\n", lista_repartir[i]);
+        }*/
+    //printf("Proceso %d Scount y displs %d %d \n", rank, scounts[0], displs[0]);
+
+    //printf("Proceso %d %d %d\n",rank, scounts[0], displs[0]);
+    //MPI_Scatterv(&lista_repartir, scounts, displs, type_pobl, &rbuf, scounts[rank], type_pobl, 0, comm);
+    /*tour_t lista_tours[scounts[rank]];
+    for (int i = 0; i < scounts[rank] * (n + 3); i += n + 3)
     {
         tour->coste = rbuf[i];
         tour->cont = rbuf[i + 1];
@@ -265,28 +333,30 @@ int main(int argc, char *argv[])
         }
         lista_tours[i] = tour;
     }
-    
-    GET_TIME(inicio);
+
+    inicio = MPI_Wtime();
     besttour = Rec_en_prof(lista_tours, scounts[rank], stack, besttour)
 
-    int besttourint[18];
-    besttourint[0]=besttour->coste;
-    besttourint[1]=besttour->cont;
+    int besttourint[n + 3];
+    besttourint[0] = besttour->coste;
+    besttourint[1] = besttour->cont;
     for (int j = 0; j < n; j++)
     {
-        besttourint[j+2] = besttour->pobl[j];
+        besttourint[j + 2] = besttour->pobl[j];
     }
 
     MPI_Send();
 
-    if(rank == 0){
-        for(int i = 0; i<size;i++){
+    if (rank == 0)
+    {
+        for (int i = 0; i < size; i++)
+        {
             MPI_Recv();
             tour->coste = btrecv[0];
             tour->count = btrecv[1];
             for (int j = 0; j < n; j++)
             {
-                tour->pobl[j] = btrecv[j+2];
+                tour->pobl[j] = btrecv[j + 2];
             }
             if (tour->coste < besttour->coste)
             {
@@ -294,11 +364,11 @@ int main(int argc, char *argv[])
             }
         }
 
-        GET_TIME(fin);
+        fin = MPI_Wtime();
 
         printTour(besttour);
         printf("Tiempo de ejecución: %lfs segundos\n", fin - inicio);
-    }
+    }*/
 
     /*Liberamos el espacio asignado a las estructuras y al grafo*/
     free(tour->pobl);
@@ -312,4 +382,3 @@ int main(int argc, char *argv[])
     MPI_Finalize();
     return 0;
 } //Para poner el if del rank 0 hasta el final para probar con 1 solo proceso MPI
-
