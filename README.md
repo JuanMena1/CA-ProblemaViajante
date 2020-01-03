@@ -46,5 +46,10 @@ Este repositorio es para realizar el problema del viajante tanto de forma secuen
  - scount y displs calculados.
  - Creado repartirRecorridos.
  - Modificación Rec_en_prof para que acepte una lista de tour_t.
+
+### Versión 2.5
+ - Esqueleto del código completo a falta de parámetros de send y receive.
+ - Seguramente no funcional.
+ - Falta ver como se hacen y se deshacen los tour y se meten en las array de intercambios para que no pase como pasaba en el push y se sobreescriban un tour a otro en el array.
  
  

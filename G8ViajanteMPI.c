@@ -163,10 +163,6 @@ void repartirRecorridos(tour_t tour, mystack stack)
             }
         }
     }
-    /*Creo que aquí hay que llamar al Scatterv para que reparta los recorridos,
-        pero no se bien como calcular scount y displs porque esto solo lo tiene que hacer
-        el proceso 0 y algo viene en las diapos
-        Al Scatterv tienen que llamarlo todos*/
 }
 
 void leerMatriz(char *nombre_archivo)
@@ -244,45 +240,65 @@ int main(int argc, char *argv[])
         {
             displs[i] = displs[i - 1] + scounts[i - 1];
         }
-    }
-    int lista_repartir[(n + 3) * stack->list_sz];
-    for (int i = 0; i < stack->list_sz*(n+3); i+=n+3)
-    {
-        lista_repartir[i] = stack->list[i]->coste;
-        lista_repartir[i + 1] = stack->list[i]->cont;
-        for (int j = 0; j < n; j++)
+        int lista_repartir[(n + 3) * stack->list_sz];
+        for (int i = 0; i < stack->list_sz*(n+3); i+=n+3)
         {
-            lista_repartir[i + 2 + j] = stack->list[i]->pobl[j];
+            lista_repartir[i] = stack->list[i]->coste;
+            lista_repartir[i + 1] = stack->list[i]->cont;
+            for (int j = 0; j < n; j++)
+            {
+                lista_repartir[i + 2 + j] = stack->list[i]->pobl[j];
+            }
         }
     }
     
     MPI_Scatterv(&lista_repartir, scounts, displs, type_pobl, &rbuf, scounts[rank], type_pobl, 0, comm);
 
     tour_t lista_tours[scounts[rank]];
-    for (int i = 0; i < scounts[rank]; i++)
+    for (int i = 0; i <scounts[rank]*(n+3); i+=n+3)
     {
+        tour->coste = rbuf[i];
+        tour->cont = rbuf[i + 1];
+        for (int j = 0; j < n; j++)
+        {
+            tour->pobl[j] = rbuf[i + 2 + j];
+        }
+        lista_tours[i] = tour;
     }
-
-    /*Llamar al Rec_en_prof(rbuf, scounts, stack, besttour)*/
-
-    //lista_tours[0] = tour;
-
-    //MPI_Scatterv(sbuf, scounts, displs, MPI_INT, rbuf, 100, MPI_INT, root, comm);
-    //MPI_Scatterv(&stack->list, scounts, displs, type_pobl, &rbuf, 100, type_pobl, 0, comm);
-
-    /* Aquí es donde cierra el MPI como lo tenía Juan
-    }
-    else
-    {    
-    }
-    */
-
+    
     GET_TIME(inicio);
-    besttour = Rec_en_profund(rbuf, scounts, stack, besttour);
-    GET_TIME(fin);
+    besttour = Rec_en_prof(lista_tours, scounts[rank], stack, besttour)
 
-    printTour(besttour);
-    printf("Tiempo de ejecución: %lfs segundos\n", fin - inicio);
+    int besttourint[18];
+    besttourint[0]=besttour->coste;
+    besttourint[1]=besttour->cont;
+    for (int j = 0; j < n; j++)
+    {
+        besttourint[j+2] = besttour->pobl[j];
+    }
+
+    MPI_Send();
+
+    if(rank == 0){
+        for(int i = 0; i<size;i++){
+            MPI_Recv();
+            tour->coste = btrecv[0];
+            tour->count = btrecv[1];
+            for (int j = 0; j < n; j++)
+            {
+                tour->pobl[j] = btrecv[j+2];
+            }
+            if (tour->coste < besttour->coste)
+            {
+                besttour = tour;
+            }
+        }
+
+        GET_TIME(fin);
+
+        printTour(besttour);
+        printf("Tiempo de ejecución: %lfs segundos\n", fin - inicio);
+    }
 
     /*Liberamos el espacio asignado a las estructuras y al grafo*/
     free(tour->pobl);
@@ -297,27 +313,3 @@ int main(int argc, char *argv[])
     return 0;
 } //Para poner el if del rank 0 hasta el final para probar con 1 solo proceso MPI
 
-/* Yo creo que la mejor opción es hacer que cuando el stack tenga por ejemplo 5 caminos y tenemos 5 nodos
-       creamos 5 stacks uno por nodo, cada uno que siga el programa como si fuera secuencial y al final
-       cada uno que saque su besttour. Al final los comparamos todos y nos quedamos con el mejor y andando.
-       No parece que sea muy dificil, si podemos hacerlo así bien y luego ya si nos sobra tiempo miramos lo
-       del scatterv.
-
-       Osea el nodo 0 empieza el programa y en cuanto haya nodos para los que quedan el se quita de hacer el programa
-       y se queda esperando los besttour de los otros, esos los mete en su pila de tours y vuelve a llamar al metodo
-       besttour con todos.
-
-       Por ejemplo si hay 5 nodos, el 0 hace hasta que haya 4 en el stack y despues un camino del stack para los rangos
-       del 1 al 4 y el rango 0 a esperar.
-
-       Así solo hay que hacer un MPI_Send por rango y 4 MPI_Receive en el rango 0.
-
-       La cosa es que como crear un stack por nodo y como meter en ese stack su primer camino que le toque para que
-       siga a partir de ese.
-
-       De todas formas el programa va rapido así que no se yo si vamos a mejorar el tiempo de ejecución pero bueno.
-
-        PD: mira lo que he encontrado https://cutt.ly/ertMbeW
-
-    */
-}
