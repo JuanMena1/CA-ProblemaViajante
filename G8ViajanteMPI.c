@@ -28,7 +28,7 @@ tour_t besttour;
 mystack stack;
 int **digraph; // Prof.: para matrices de enteros suele ser más recomendable usar int* que int**
 int n;
-int size, rank, sbuf, root, rbuf[100], *displs, *scounts;
+int size, rank, sbuf, root, *displs, *scounts;
 MPI_Status status;
 
 /*Métodos*/
@@ -53,7 +53,7 @@ void printStack()
     printf("----------------------------\n\n");
 }
 
-void push(tour_t tour)
+void push(tour_t tour, mystack stack)
 {
     /*Creamos un tour auxiliar que es el que metemos a la pila*/
     tour_t tour2;
@@ -69,7 +69,7 @@ void push(tour_t tour)
     (stack->list_sz)++;
 }
 
-tour_t pop()
+tour_t pop(mystack stack)
 {
     /*Creamos un tour_t y lo rellenamos con el primer tour de la pila*/
     tour_t tour;
@@ -79,7 +79,7 @@ tour_t pop()
     return tour;
 }
 
-int factible(tour_t tour, int poblacion)
+int factible(tour_t tour, int poblacion, tour_t besttour)
 {
     /*Vemos si el tour que vamos a meter a la pila tiene un coste menor que el besttour*/
     if ((tour->coste + digraph[tour->pobl[tour->cont - 1]][poblacion]) >= besttour->coste)
@@ -97,17 +97,17 @@ int factible(tour_t tour, int poblacion)
     return 1;
 }
 
-void Rec_en_profund(tour_t tour)
+tour_t Rec_en_profund(tour_t lista_tours[], int tamano, mystack stack, tour_t besttour)
 {
-    int contador = 0;
-    push(tour);
+    for (int i = 0; i < tamano; i++)
+        push(lista_tours[i], stack);
+    tour_t tour;
     while (stack->list_sz != 0)
     {
-        //printf("Tamaño pila: %d", stack->list_sz);
-        tour = pop();
+        tour = pop(stack);
         if (tour->cont == n)
         { /*Comprobamos si ya hemos visitado todas las poblaciones*/
-            /*Añadimos la población 0 para acabar el tour y actualizamos el coste
+            /*Añadimos la población 0 para acabar el tour, actualizamos el coste
             y el cont*/
             tour->pobl[tour->cont] = 0;
             tour->coste = tour->coste + digraph[tour->pobl[tour->cont - 1]][0];
@@ -121,14 +121,13 @@ void Rec_en_profund(tour_t tour)
         {
             for (int i = n - 1; i > 0; i--)
             {
-                if (factible(tour, i))
+                if (factible(tour, i, besttour))
                 {
                     /*Actualizamos los valores con el tour nuevo*/
                     tour->pobl[tour->cont] = i;
                     tour->coste = tour->coste + digraph[tour->pobl[tour->cont - 1]][i];
                     (tour->cont)++;
-                    push(tour);
-                    contador++;
+                    push(tour, stack);
                     /*Deshacemos los cambios anteriores para explorar un nuevo tour*/
                     (tour->cont)--;
                     tour->coste = tour->coste - digraph[tour->pobl[tour->cont - 1]][i];
@@ -136,13 +135,38 @@ void Rec_en_profund(tour_t tour)
             }
         }
     }
-    if(contador >= size){
-        /*Creo que aquí hay que llamar al Scatterv para que reparta los recorridos,
+    return besttour;
+}
+
+void repartirRecorridos(tour_t tour, mystack stack)
+{
+    push(tour, stack);
+    while (stack->list_sz != 0)
+    {
+        if (stack->list_sz >= size)
+        {
+            break;
+        }
+        tour = pop(stack);
+        for (int i = n - 1; i > 0; i--)
+        {
+            if (factible(tour, i, besttour))
+            {
+                /*Actualizamos los valores con el tour nuevo*/
+                tour->pobl[tour->cont] = i;
+                tour->coste = tour->coste + digraph[tour->pobl[tour->cont - 1]][i];
+                (tour->cont)++;
+                push(tour, stack);
+                /*Deshacemos los cambios anteriores para explorar un nuevo tour*/
+                (tour->cont)--;
+                tour->coste = tour->coste - digraph[tour->pobl[tour->cont - 1]][i];
+            }
+        }
+    }
+    /*Creo que aquí hay que llamar al Scatterv para que reparta los recorridos,
         pero no se bien como calcular scount y displs porque esto solo lo tiene que hacer
         el proceso 0 y algo viene en las diapos
         Al Scatterv tienen que llamarlo todos*/
-        contador = 0;
-    }
 }
 
 void leerMatriz(char *nombre_archivo)
@@ -174,45 +198,77 @@ int main(int argc, char *argv[])
 {
     double inicio, fin;
     tour_t tour;
+    mystack stack;
+    tour_t besttour;
     MPI_Datatype type_pobl;
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm comm;
 
-    MPI_Type_contiguous(n+2, MPI_INT, &type_pobl);
+    MPI_Type_contiguous(n + 3, MPI_INT, &type_pobl);
     MPI_Type_commit(&type_pobl);
+    type_pobl rbuf[100];
+
+    /*Reservamos espacio para tour, besttour y la pila*/
+    tour = (tour_t)malloc(sizeof(tour_struct));
+    besttour = (tour_t)malloc(sizeof(tour_struct));
+    stack = (mystack)malloc(sizeof(stack_struct));
+
+    stack->list = (tour_t *)malloc((2 + n * (n - 3) / 2) * sizeof(tour_t));
+    besttour->pobl = (int *)malloc((n + 1) * sizeof(int));
+    tour->pobl = (int *)malloc((n + 1) * sizeof(int));
+
+    /*Inicializamos tour, besttour y la pila*/
+    tour->pobl[0] = 0;
+    tour->cont = 1;
+    tour->coste = 0;
+
+    besttour->pobl = 0;
+    besttour->cont = 1;
+    besttour->coste = INT_MAX;
+
+    stack->list_sz = 0;
 
     if (rank == 0)
     {
         leerMatriz(argv[1]);
-        /*Reservamos espacio para tour, besttour y la pila*/
-        tour = (tour_t)malloc(sizeof(tour_struct));
-        besttour = (tour_t)malloc(sizeof(tour_struct));
-        stack = (mystack)malloc(sizeof(stack_struct));
-
-        stack->list = (tour_t *)malloc((2 + n * (n - 3) / 2) * sizeof(tour_t));
-        besttour->pobl = (int *)malloc((n + 1) * sizeof(int));
-        tour->pobl = (int *)malloc((n + 1) * sizeof(int));
-
-        /*Inicializamos tour, besttour y la pila*/
-        tour->pobl[0] = 0;
-        tour->cont = 1;
-        tour->coste = 0;
-
-        besttour->pobl = 0;
-        besttour->cont = 1;
-        besttour->coste = INT_MAX;
-
-        stack->list_sz = 0;
-
-        for (int i=0; i<size; i++) {
-            scounts[i]=recorridos_proceso;
-            displs[i]+=displs[i-1]+scounts[i-1];
+        repartirRecorridos(tour, stack);
+        for (int i = 0; i < size; i++)
+        {
+            scounts[i] = stack->list_sz / size;
         }
+        scounts[size - 1] = stack->list_sz / size + stack->list_sz % size;
+        displs[0] = 0;
+        for (int i = 1; i < size; i++)
+        {
+            displs[i] = displs[i - 1] + scounts[i - 1];
+        }
+    }
+    int lista_repartir[(n + 3) * stack->list_sz];
+    for (int i = 0; i < stack->list_sz*(n+3); i+=n+3)
+    {
+        lista_repartir[i] = stack->list[i]->coste;
+        lista_repartir[i + 1] = stack->list[i]->cont;
+        for (int j = 0; j < n; j++)
+        {
+            lista_repartir[i + 2 + j] = stack->list[i]->pobl[j];
+        }
+    }
+    
+    MPI_Scatterv(&lista_repartir, scounts, displs, type_pobl, &rbuf, scounts[rank], type_pobl, 0, comm);
 
-        //MPI_Scatterv(sbuf, scounts, displs, MPI_INT, rbuf, 100, MPI_INT, root, comm);
-        //MPI_Scatterv(&stack->list, scounts, displs, type_pobl, &rbuf, 100, type_pobl, 0, comm);
+    tour_t lista_tours[scounts[rank]];
+    for (int i = 0; i < scounts[rank]; i++)
+    {
+    }
+
+    /*Llamar al Rec_en_prof(rbuf, scounts, stack, besttour)*/
+
+    //lista_tours[0] = tour;
+
+    //MPI_Scatterv(sbuf, scounts, displs, MPI_INT, rbuf, 100, MPI_INT, root, comm);
+    //MPI_Scatterv(&stack->list, scounts, displs, type_pobl, &rbuf, 100, type_pobl, 0, comm);
 
     /* Aquí es donde cierra el MPI como lo tenía Juan
     }
@@ -222,7 +278,7 @@ int main(int argc, char *argv[])
     */
 
     GET_TIME(inicio);
-    Rec_en_profund(tour);
+    besttour = Rec_en_profund(rbuf, scounts, stack, besttour);
     GET_TIME(fin);
 
     printTour(besttour);
@@ -239,9 +295,9 @@ int main(int argc, char *argv[])
 
     MPI_Finalize();
     return 0;
-    } //Para poner el if del rank 0 hasta el final para probar con 1 solo proceso MPI
+} //Para poner el if del rank 0 hasta el final para probar con 1 solo proceso MPI
 
-    /* Yo creo que la mejor opción es hacer que cuando el stack tenga por ejemplo 5 caminos y tenemos 5 nodos
+/* Yo creo que la mejor opción es hacer que cuando el stack tenga por ejemplo 5 caminos y tenemos 5 nodos
        creamos 5 stacks uno por nodo, cada uno que siga el programa como si fuera secuencial y al final
        cada uno que saque su besttour. Al final los comparamos todos y nos quedamos con el mejor y andando.
        No parece que sea muy dificil, si podemos hacerlo así bien y luego ya si nos sobra tiempo miramos lo

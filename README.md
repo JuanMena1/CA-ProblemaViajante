@@ -41,3 +41,10 @@ Este repositorio es para realizar el problema del viajante tanto de forma secuen
 
 ### Versión 2.3
  - Reparado problema del método leerMatriz.
+
+### Versión 2.4
+ - scount y displs calculados.
+ - Creado repartirRecorridos.
+ - Modificación Rec_en_prof para que acepte una lista de tour_t.
+ 
+ 
