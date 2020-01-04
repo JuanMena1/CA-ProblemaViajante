@@ -27,10 +27,37 @@ typedef stack_struct *mystack;
 /*Variables Globales*/
 int **digraph; // Prof.: para matrices de enteros suele ser más recomendable usar int* que int**
 int n;
-int size, rank, sbuf, root;
+int size, rank;
 MPI_Status status;
 
 /*Métodos*/
+tour_t compararTour(tour_t t1, tour_t t2){
+    if (t1->coste < t2->coste)
+    {
+        *t2 = *t1;
+    }
+    return t2;
+}
+
+void tourAArray(tour_t tour, int arr[]){
+    arr[0]=tour->coste;
+    arr[1]=tour->cont;
+    for (int j = 0; j < tour->cont; j++)
+    {
+        arr[2+j]=tour->pobl[j];
+    }
+}
+
+tour_t arrayATour(tour_t tour, int arr[]){
+    tour->coste=arr[0];
+    tour->cont=arr[1];
+    for (int j = 0; j < tour->cont; j++)
+    {
+        tour->pobl[j]=arr[j+2];
+    }
+    return tour;
+}
+
 void printTour(tour_t tour)
 {
     printf("~~~~~~Besttour:~~~~~~\nNº poblaciones: %d\nPoblaciones: ", tour->cont - 1);
@@ -103,16 +130,12 @@ tour_t Rec_en_profund(mystack stack, tour_t besttour)
     {
         tour = pop(stack);
         if (tour->cont == n)
-        { /*Comprobamos si ya hemos visitado todas las poblaciones*/
-            /*Añadimos la población 0 para acabar el tour, actualizamos el coste
-            y el cont*/
+        {   /*Comprobamos si ya hemos visitado todas las poblaciones*/
+            /*Añadimos la población 0 para acabar el tour, actualizamos el coste y el cont*/
             tour->pobl[tour->cont] = 0;
             tour->coste = tour->coste + digraph[tour->pobl[tour->cont - 1]][0];
             (tour->cont)++;
-            if (tour->coste < besttour->coste)
-            {
-                besttour = tour;
-            }
+            besttour=compararTour(tour, besttour);
         }
         else
         {
@@ -135,7 +158,7 @@ tour_t Rec_en_profund(mystack stack, tour_t besttour)
     return besttour;
 }
 
-void repartirRecorridos(tour_t tour, mystack stack, tour_t besttour)
+void obtenerRecorridos(tour_t tour, mystack stack, tour_t besttour)
 {
     push(tour, stack);
     while (stack->list_sz < size)
@@ -188,14 +211,12 @@ void leerMatriz(char *nombre_archivo)
 int main(int argc, char *argv[])
 {
     double inicio, fin, suma;
-    tour_t tour;
+    tour_t tour,besttour;
     mystack stack;
-    tour_t besttour;
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm comm;
-    MPI_Request request;
 
     inicio = MPI_Wtime();
     if (rank == 0)
@@ -203,12 +224,12 @@ int main(int argc, char *argv[])
         leerMatriz(argv[1]);
     }
 
-    MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD);
+    MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD); //Enviamos el número de problaciones a todos los procesos
 
     fin = MPI_Wtime();
     suma = fin-inicio;
 
-    /*Reservamos memoria para el digraph*/
+    /*Reservamos memoria para el digraph en los procesos que no han leido la matriz*/
     if(rank != 0){
         digraph = (int **)malloc(n * sizeof(int *));
         for (int i = 0; i < n; i++)
@@ -219,7 +240,7 @@ int main(int argc, char *argv[])
 
     inicio = MPI_Wtime();
 
-    for(int i = 0; i< n; i++){
+    for(int i = 0; i< n; i++){ //Enviamos el grafo de poblaciones a los procesos que no lo han leido
         for(int j = 0;j<n;j++){
             MPI_Bcast(&digraph[i][j],1,MPI_INT,0,MPI_COMM_WORLD);
         }
@@ -243,93 +264,67 @@ int main(int argc, char *argv[])
     besttour->cont = 1;
     besttour->coste = INT_MAX;
     stack->list_sz = 0;
-    int lista_repartir[(n + 3) * stack->list_sz];
-    int num_enviar;
-    int aux[n+3];
+
+    //Declaramos variables para paralelizar
+    int num_env, num_recv;
+    int sbuf[n+3],rbuf[n+3];
     int contador = 0;
     int receptor = 1;
-    int rbuf[100];
-    int num_recv;
 
     if (rank == 0)
     {
-        repartirRecorridos(tour, stack, besttour);
-        num_enviar = stack->list_sz - (size - 2) * (int)ceil((float)stack->list_sz / (float)(size-1));
-        MPI_Send(&num_enviar, 1, MPI_INT, size-1, 0, MPI_COMM_WORLD);
+        obtenerRecorridos(tour, stack, besttour); //Recorremos el while hasta que tenemos tantos o más tour como procesos
+        num_env = stack->list_sz - (size - 2) * (int)ceil((float)stack->list_sz / (float)(size-1));
+        MPI_Send(&num_env, 1, MPI_INT, size-1, 0, MPI_COMM_WORLD);
 
-        num_enviar = (int)ceil((float)stack->list_sz / (float)(size-1));
-        for(int i=1;i<size-1;i++){
-            MPI_Send(&num_enviar, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+        num_env = (int)ceil((float)stack->list_sz / (float)(size-1));
+        for(int i=1;i<size-1;i++){ //Enviamos el numero de tour que tocan a cada proceso
+            MPI_Send(&num_env, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
         }
+
         int vueltas_for = stack->list_sz;
-        for(int i=0;i<vueltas_for;i++){
+        for(int i=0;i<vueltas_for;i++){ //Enviamos a cada proceso sus tour
             tour = pop(stack);
-            aux[0]=tour->coste;
-            aux[1]=tour->cont;
-            for (int j = 0; j < tour->cont; j++)
-            {
-                aux[2+j]=tour->pobl[j];
-            }
-            if(contador==num_enviar){
+            tourAArray(tour, sbuf);
+            if(contador==num_env){
                 receptor++;
                 contador=0;
             }
-            MPI_Isend(&aux, n+3, MPI_INT, receptor, 0, MPI_COMM_WORLD, &request);
+            MPI_Send(&sbuf, n+3, MPI_INT, receptor, 0, MPI_COMM_WORLD);
             contador++;
         }
-        //Recibimos los besttour
+
+        //Recibimos los besttour de cada proceso y los comparamos
         for(int i = 1; i<size;i++){
             MPI_Recv(&rbuf, n+3, MPI_INT, i ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-            tour->coste=rbuf[0];
-            tour->cont=rbuf[1];
-            for (int j = 0; j < tour->cont; j++)
-            {
-                tour->pobl[j]=rbuf[j+2];
-            }
-
-            if (tour->coste < besttour->coste)
-            {
-                *besttour = *tour;
-            }
+            tour = arrayATour(tour, rbuf);
+            besttour = compararTour(tour, besttour);
         }
         fin = MPI_Wtime();
         suma = suma + (fin-inicio);
         printTour(besttour);
         printf("El programa paralelo tarda %lfs.\n", suma);
     } else {
-        MPI_Recv(&num_recv, 1, MPI_INT, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        MPI_Recv(&num_recv, 1, MPI_INT, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status); //Recibimos cuantos tour le tocan a cada proceso
         for(int i=0;i<num_recv;i++){
-            MPI_Recv(&rbuf, n+3, MPI_INT, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-
-            tour->coste=rbuf[0];
-            tour->cont=rbuf[1];
-            for (int j = 0; j < tour->cont; j++)
-            {
-                tour->pobl[j]=rbuf[j+2];
-            }
+            MPI_Recv(&rbuf, n+3, MPI_INT, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status); //Recibimos los tour
+            tour = arrayATour(tour, rbuf);
             push(tour, stack);
         }
 
-        besttour = Rec_en_profund(stack,besttour);
-        aux[0]=besttour->coste;
-        aux[1]=besttour->cont;
-        for (int j = 0; j < besttour->cont; j++)
-        {
-            aux[2+j]=besttour->pobl[j];
-        }
-        MPI_Send(&aux, n+3, MPI_INT, 0, 0, MPI_COMM_WORLD);
+        besttour = Rec_en_profund(stack,besttour); //Ejecutamos el algoritmo
+        tourAArray(besttour,sbuf);
+        MPI_Send(&sbuf, n+3, MPI_INT, 0, 0, MPI_COMM_WORLD); //Enviamos los besttour de cada proceso al 0
     }
         
-
     /*Liberamos el espacio asignado a las estructuras y al grafo*/
+    
     free(tour->pobl);
     free(tour);
-    free(besttour->pobl);
-    free(besttour);
     free(stack->list);
     free(stack);
     free(digraph);
-
+    
     MPI_Finalize();
     return 0;
 }

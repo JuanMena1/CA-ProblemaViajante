@@ -66,5 +66,9 @@ Este repositorio es para realizar el problema del viajante tanto de forma secuen
  - Programa funcional.
  - Falta solucionar una excepción que no sabemos donde da.
  - Falta formatear el código y simplificarlo.
+
+### Versión 3.1
+ - Código estructurado.
+ - Excepción solucionada.
  
  
