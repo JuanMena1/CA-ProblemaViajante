@@ -61,5 +61,10 @@ Este repositorio es para realizar el problema del viajante tanto de forma secuen
 ### Versión 2.8
  - Cada proceso saca su besttour.
  - Falta enviarlos al 0 y que elija el mejor global.
+
+### Versión 3.0
+ - Programa funcional.
+ - Falta solucionar una excepción que no sabemos donde da.
+ - Falta formatear el código y simplificarlo.
  
  

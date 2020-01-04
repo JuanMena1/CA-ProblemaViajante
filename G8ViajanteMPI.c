@@ -25,8 +25,6 @@ typedef struct
 typedef stack_struct *mystack;
 
 /*Variables Globales*/
-tour_t besttour;
-mystack stack;
 int **digraph; // Prof.: para matrices de enteros suele ser más recomendable usar int* que int**
 int n;
 int size, rank, sbuf, root;
@@ -189,7 +187,7 @@ void leerMatriz(char *nombre_archivo)
 
 int main(int argc, char *argv[])
 {
-    double inicio, fin;
+    double inicio, fin, suma;
     tour_t tour;
     mystack stack;
     tour_t besttour;
@@ -199,12 +197,16 @@ int main(int argc, char *argv[])
     MPI_Comm comm;
     MPI_Request request;
 
+    inicio = MPI_Wtime();
     if (rank == 0)
     {
         leerMatriz(argv[1]);
     }
 
     MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD);
+
+    fin = MPI_Wtime();
+    suma = fin-inicio;
 
     /*Reservamos memoria para el digraph*/
     if(rank != 0){
@@ -214,6 +216,8 @@ int main(int argc, char *argv[])
             digraph[i] = (int *)malloc(n * sizeof(int));
         }
     }
+
+    inicio = MPI_Wtime();
 
     for(int i = 0; i< n; i++){
         for(int j = 0;j<n;j++){
@@ -273,6 +277,25 @@ int main(int argc, char *argv[])
             MPI_Isend(&aux, n+3, MPI_INT, receptor, 0, MPI_COMM_WORLD, &request);
             contador++;
         }
+        //Recibimos los besttour
+        for(int i = 1; i<size;i++){
+            MPI_Recv(&rbuf, n+3, MPI_INT, i ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            tour->coste=rbuf[0];
+            tour->cont=rbuf[1];
+            for (int j = 0; j < tour->cont; j++)
+            {
+                tour->pobl[j]=rbuf[j+2];
+            }
+
+            if (tour->coste < besttour->coste)
+            {
+                *besttour = *tour;
+            }
+        }
+        fin = MPI_Wtime();
+        suma = suma + (fin-inicio);
+        printTour(besttour);
+        printf("El programa paralelo tarda %lfs.\n", suma);
     } else {
         MPI_Recv(&num_recv, 1, MPI_INT, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         for(int i=0;i<num_recv;i++){
@@ -288,6 +311,13 @@ int main(int argc, char *argv[])
         }
 
         besttour = Rec_en_profund(stack,besttour);
+        aux[0]=besttour->coste;
+        aux[1]=besttour->cont;
+        for (int j = 0; j < besttour->cont; j++)
+        {
+            aux[2+j]=besttour->pobl[j];
+        }
+        MPI_Send(&aux, n+3, MPI_INT, 0, 0, MPI_COMM_WORLD);
     }
         
 
