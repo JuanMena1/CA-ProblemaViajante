@@ -1,10 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "timer.h"
 #include <limits.h>
-#include "mpi.h"
 #include <math.h>
+#include "mpi.h"
 
 /*Estructuras*/
 typedef struct
@@ -318,7 +317,6 @@ int main(int argc, char *argv[])
     }
         
     /*Liberamos el espacio asignado a las estructuras y al grafo*/
-    
     free(tour->pobl);
     free(tour);
     free(stack->list);
@@ -326,5 +324,5 @@ int main(int argc, char *argv[])
     free(digraph);
     
     MPI_Finalize();
-    return 0;
+    return EXIT_SUCCESS;
 }
