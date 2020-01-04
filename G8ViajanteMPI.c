@@ -173,10 +173,11 @@ void leerMatriz(char *nombre_archivo)
 
     /*Reservamos memoria para el digraph*/
     digraph = (int **)malloc(n * sizeof(int *));
-    for (i = 0; i < n; i++)
+    for (int i = 0; i < n; i++)
     {
         digraph[i] = (int *)malloc(n * sizeof(int));
     }
+
     /*Rellenamos el digraph con los valores del fichero*/
     for (i = 0; i < n; i++)
     {
@@ -194,19 +195,29 @@ int main(int argc, char *argv[])
     tour_t tour;
     mystack stack;
     tour_t besttour;
-    MPI_Datatype type_pobl;
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm comm;
     MPI_Request request;
-    int *scounts = malloc(sizeof(int)*size);
-    int *displs = malloc(sizeof(int)*size);
 
-    MPI_Type_contiguous(n + 3, MPI_INT, &type_pobl);
-    MPI_Type_commit(&type_pobl);
-    int rbuf[100];
-    int num_recv[1];
+    if (rank == 0)
+    {
+        leerMatriz(argv[1]);
+    }
+
+    MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD);
+
+    /*Reservamos memoria para el digraph*/
+    if(rank != 0){
+        digraph = (int **)malloc(n * sizeof(int *));
+        for (int i = 0; i < n; i++)
+        {
+            digraph[i] = (int *)malloc(n * sizeof(int));
+        }
+    }
+
+    //MPI_Bcast(&(digraph[0][0]),n*n,MPI_INT,0,MPI_COMM_WORLD);
 
     /*Reservamos espacio para tour, besttour y la pila*/
     tour = (tour_t)malloc(sizeof(tour_struct));
@@ -227,22 +238,22 @@ int main(int argc, char *argv[])
     besttour->coste = INT_MAX;
     stack->list_sz = 0;
     int lista_repartir[(n + 3) * stack->list_sz];
-    int num_enviar[2];
+    int num_enviar;
     int aux[n+3];
     int contador = 0;
     int receptor = 1;
+    int rbuf[100];
+    int num_recv;
 
     if (rank == 0)
     {
-        leerMatriz(argv[1]);
         repartirRecorridos(tour, stack, besttour);
-        num_enviar[0] = stack->list_sz - (size - 2) * (int)ceil((float)stack->list_sz / (float)(size-1));
-        num_enviar[1] = n+3;
-        MPI_Send(&num_enviar, 2, MPI_INT, size-1, 0, MPI_COMM_WORLD);
+        num_enviar = stack->list_sz - (size - 2) * (int)ceil((float)stack->list_sz / (float)(size-1));
+        MPI_Send(&num_enviar, 1, MPI_INT, size-1, 0, MPI_COMM_WORLD);
 
-        num_enviar[0] = (int)ceil((float)stack->list_sz / (float)(size-1));
+        num_enviar = (int)ceil((float)stack->list_sz / (float)(size-1));
         for(int i=1;i<size-1;i++){
-            MPI_Send(&num_enviar, 2, MPI_INT, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&num_enviar, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
         }
         int vueltas_for = stack->list_sz;
         for(int i=0;i<vueltas_for;i++){
@@ -253,7 +264,7 @@ int main(int argc, char *argv[])
             {
                 aux[2+j]=tour->pobl[j];
             }
-            if(contador==num_enviar[0]){
+            if(contador==num_enviar){
                 receptor++;
                 contador=0;
             }
@@ -261,10 +272,9 @@ int main(int argc, char *argv[])
             contador++;
         }
     } else {
-        MPI_Recv(&num_recv, 2, MPI_INT, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-        int tam_buff = num_recv[1];
-        for(int i=0;i<num_recv[0];i++){
-            MPI_Recv(&rbuf, tam_buff, MPI_INT, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        MPI_Recv(&num_recv, 1, MPI_INT, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        for(int i=0;i<num_recv;i++){
+            MPI_Recv(&rbuf, n+3, MPI_INT, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
             tour->coste=rbuf[0];
             tour->cont=rbuf[1];
@@ -274,8 +284,8 @@ int main(int argc, char *argv[])
             }
             push(tour, stack);
         }
-        //printf("Proceso %d, stack:\n", rank);
-        //printStack(stack);
+        printf("Proceso %d, stack:\n", rank);
+        printStack(stack);
     }
         
 
