@@ -59,23 +59,12 @@ tour_t arrayATour(tour_t tour, int arr[]){
 
 void printTour(tour_t tour)
 {
-    printf("~~~~~~Besttour:~~~~~~\nNº poblaciones: %d\nPoblaciones: ", tour->cont - 1);
+    printf("*~~~~~~~~~~~~~~~~~~~~Besttour:~~~~~~~~~~~~~~~~~~~~*\n - Nº poblaciones: %d\nPoblaciones: ", tour->cont - 1);
     for (int i = 0; i < tour->cont; i++)
     {
         printf("%d ", tour->pobl[i]);
     }
-    printf("\nCoste: %d\n~~~~~~~~~~~~~~~~~~\n", tour->coste);
-}
-
-void printStack(mystack stack)
-{
-    printf("-----------STACK------------\n");
-    printf(" - Tamaño: %d\n", stack->list_sz);
-    for (int i = 0; i < stack->list_sz; i++)
-    {
-        printTour(stack->list[i]);
-    }
-    printf("----------------------------\n\n");
+    printf("\n - Coste: %d\n*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*\n", tour->coste);
 }
 
 void push(tour_t tour, mystack stack)

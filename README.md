@@ -70,5 +70,10 @@ Este repositorio es para realizar el problema del viajante tanto de forma secuen
 ### Versión 3.1
  - Código estructurado.
  - Excepción solucionada.
+
+### Versión 3.2
+ - Versión Final.
+ - Eliminado método que no se utilizaba.
+ - Formato al print final.
  
  
