@@ -227,7 +227,7 @@ int main(int argc, char *argv[])
     besttour->coste = INT_MAX;
     stack->list_sz = 0;
     int lista_repartir[(n + 3) * stack->list_sz];
-    int num_enviar = 0;
+    int num_enviar[2];
     int aux[n+3];
     int contador = 0;
     int receptor = 1;
@@ -236,139 +236,48 @@ int main(int argc, char *argv[])
     {
         leerMatriz(argv[1]);
         repartirRecorridos(tour, stack, besttour);
-        printf("Hay %d procesos list_sz %d y a cada uno le tocan %d tours, al ultimo le toca %d \n", size, stack->list_sz, (int)ceil((float)stack->list_sz / (float)(size-1)), stack->list_sz - (size - 2) * (int)ceil((float)stack->list_sz / (float)(size-1)));
-        num_enviar = stack->list_sz - (size - 2) * (int)ceil((float)stack->list_sz / (float)(size-1));
-        MPI_Send(&num_enviar, 1, MPI_INT, size-1, 0, MPI_COMM_WORLD);
+        num_enviar[0] = stack->list_sz - (size - 2) * (int)ceil((float)stack->list_sz / (float)(size-1));
+        num_enviar[1] = n+3;
+        MPI_Send(&num_enviar, 2, MPI_INT, size-1, 0, MPI_COMM_WORLD);
 
-        num_enviar = (int)ceil((float)stack->list_sz / (float)(size-1));
+        num_enviar[0] = (int)ceil((float)stack->list_sz / (float)(size-1));
         for(int i=1;i<size-1;i++){
-            MPI_Send(&num_enviar, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&num_enviar, 2, MPI_INT, i, 0, MPI_COMM_WORLD);
         }
         int vueltas_for = stack->list_sz;
         for(int i=0;i<vueltas_for;i++){
             tour = pop(stack);
-            aux[i]=tour->coste;
-            aux[i+1]=tour->cont;
+            aux[0]=tour->coste;
+            aux[1]=tour->cont;
             for (int j = 0; j < tour->cont; j++)
             {
-                aux[i+2+j]=tour->pobl[j];
-                //printf("Pobl %d\n", tour->pobl[j]);
+                aux[2+j]=tour->pobl[j];
             }
-            if(contador==num_enviar){
+            if(contador==num_enviar[0]){
                 receptor++;
                 contador=0;
             }
-            MPI_Isend(&aux, 1, type_pobl, receptor, 0, MPI_COMM_WORLD, &request);
-            //printf("pasa Isend\n");
+            MPI_Isend(&aux, n+3, MPI_INT, receptor, 0, MPI_COMM_WORLD, &request);
             contador++;
         }
     } else {
-        MPI_Recv(&num_recv, 1, MPI_INT, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-        //printf("Llega %d\n", num_recv[0]);
-
-        printf("Soy el proceso %d y voy a recibir %d\n", rank, num_recv[0]);
+        MPI_Recv(&num_recv, 2, MPI_INT, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        int tam_buff = num_recv[1];
         for(int i=0;i<num_recv[0];i++){
-            MPI_Recv(&rbuf, 1, type_pobl, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-            //printf("pasa 2 recv\n");
+            MPI_Recv(&rbuf, tam_buff, MPI_INT, 0 ,MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
             tour->coste=rbuf[0];
             tour->cont=rbuf[1];
-            printf("cont %d\n", tour->cont);
             for (int j = 0; j < tour->cont; j++)
             {
                 tour->pobl[j]=rbuf[j+2];
             }
-            
             push(tour, stack);
         }
+        //printf("Proceso %d, stack:\n", rank);
         //printStack(stack);
     }
-        /*//Mierda del Scatterv
         
-        for (int i = 0; i < size - 1; i++)
-        {
-            scounts[i] = (int)ceil((float)stack->list_sz / (float)size);
-        }
-        scounts[size - 1] = stack->list_sz - (size - 1) * (int)ceil((float)stack->list_sz / (float)size);
-        displs[0] = 0;
-        for (int i = 1; i < size; i++)
-        {
-            displs[i] = displs[i - 1] + scounts[i - 1];
-        }
-        int tamano_for = stack->list_sz;
-        int desplazamiento = 0;
-        
-
-        for (int i = 0; i < tamano_for; i++)
-        {   
-            tour = pop(stack);
-            lista_repartir[desplazamiento] = tour->coste;
-            lista_repartir[desplazamiento + 1] = tour->cont;
-            //printf("%d %d\n", lista_repartir[desplazamiento], lista_repartir[desplazamiento+1]);
-            //printStack(stack);
-            for (int j = 0; j < tour->cont; j++)
-            {
-                //printf("%d  %d\n", i, j);
-                //printTour(tour);
-                //printf("%d\n",tour->pobl[j]);
-                lista_repartir[desplazamiento + 2 + j] = tour->pobl[j];
-            }
-            desplazamiento+=n+3;
-        }*/
-        /*for(int i=0;i<tamano_for*(n+3);i++){
-            printf("%d\n", lista_repartir[i]);
-        }*/
-    //printf("Proceso %d Scount y displs %d %d \n", rank, scounts[0], displs[0]);
-
-    //printf("Proceso %d %d %d\n",rank, scounts[0], displs[0]);
-    //MPI_Scatterv(&lista_repartir, scounts, displs, type_pobl, &rbuf, scounts[rank], type_pobl, 0, comm);
-    /*tour_t lista_tours[scounts[rank]];
-    for (int i = 0; i < scounts[rank] * (n + 3); i += n + 3)
-    {
-        tour->coste = rbuf[i];
-        tour->cont = rbuf[i + 1];
-        for (int j = 0; j < n; j++)
-        {
-            tour->pobl[j] = rbuf[i + 2 + j];
-        }
-        lista_tours[i] = tour;
-    }
-
-    inicio = MPI_Wtime();
-    besttour = Rec_en_prof(lista_tours, scounts[rank], stack, besttour)
-
-    int besttourint[n + 3];
-    besttourint[0] = besttour->coste;
-    besttourint[1] = besttour->cont;
-    for (int j = 0; j < n; j++)
-    {
-        besttourint[j + 2] = besttour->pobl[j];
-    }
-
-    MPI_Send();
-
-    if (rank == 0)
-    {
-        for (int i = 0; i < size; i++)
-        {
-            MPI_Recv();
-            tour->coste = btrecv[0];
-            tour->count = btrecv[1];
-            for (int j = 0; j < n; j++)
-            {
-                tour->pobl[j] = btrecv[j + 2];
-            }
-            if (tour->coste < besttour->coste)
-            {
-                besttour = tour;
-            }
-        }
-
-        fin = MPI_Wtime();
-
-        printTour(besttour);
-        printf("Tiempo de ejecución: %lfs segundos\n", fin - inicio);
-    }*/
 
     /*Liberamos el espacio asignado a las estructuras y al grafo*/
     free(tour->pobl);
@@ -381,4 +290,4 @@ int main(int argc, char *argv[])
 
     MPI_Finalize();
     return 0;
-} //Para poner el if del rank 0 hasta el final para probar con 1 solo proceso MPI
+}

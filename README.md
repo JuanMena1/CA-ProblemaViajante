@@ -51,5 +51,8 @@ Este repositorio es para realizar el problema del viajante tanto de forma secuen
  - Esqueleto del código completo a falta de parámetros de send y receive.
  - Seguramente no funcional.
  - Falta ver como se hacen y se deshacen los tour y se meten en las array de intercambios para que no pase como pasaba en el push y se sobreescriban un tour a otro en el array.
+
+### Versión 2.6
+ - Stacks de cada proceso listos.
  
  
