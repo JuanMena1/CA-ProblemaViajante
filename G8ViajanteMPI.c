@@ -98,10 +98,8 @@ int factible(tour_t tour, int poblacion, tour_t besttour)
     return 1;
 }
 
-tour_t Rec_en_profund(tour_t lista_tours[], int tamano, mystack stack, tour_t besttour)
+tour_t Rec_en_profund(mystack stack, tour_t besttour)
 {
-    for (int i = 0; i < tamano; i++)
-        push(lista_tours[i], stack);
     tour_t tour;
     while (stack->list_sz != 0)
     {
@@ -217,7 +215,11 @@ int main(int argc, char *argv[])
         }
     }
 
-    //MPI_Bcast(&(digraph[0][0]),n*n,MPI_INT,0,MPI_COMM_WORLD);
+    for(int i = 0; i< n; i++){
+        for(int j = 0;j<n;j++){
+            MPI_Bcast(&digraph[i][j],1,MPI_INT,0,MPI_COMM_WORLD);
+        }
+    }
 
     /*Reservamos espacio para tour, besttour y la pila*/
     tour = (tour_t)malloc(sizeof(tour_struct));
@@ -284,8 +286,8 @@ int main(int argc, char *argv[])
             }
             push(tour, stack);
         }
-        printf("Proceso %d, stack:\n", rank);
-        printStack(stack);
+
+        besttour = Rec_en_profund(stack,besttour);
     }
         
 
